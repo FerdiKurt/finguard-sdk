@@ -30,8 +30,14 @@ describe("FinGuardClient", () => {
   });
 
   it("throws FinGuardApiError for API errors", async () => {
+    const errorBody = {
+      error: {
+        message: "Missing API key.",
+        details: { code: "missing_api_key" }
+      }
+    };
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: "Missing API key." } }), {
+      new Response(JSON.stringify(errorBody), {
         status: 401,
         headers: { "content-type": "application/json" }
       })
@@ -45,10 +51,52 @@ describe("FinGuardClient", () => {
     await expect(client.listApprovals("org_123")).rejects.toMatchObject({
       name: "FinGuardApiError",
       status: 401,
-      message: "Missing API key."
+      message: "Missing API key.",
+      details: { code: "missing_api_key" },
+      body: errorBody
     });
 
     expect(FinGuardApiError).toBeDefined();
+  });
+
+  it("throws FinGuardApiError for empty response bodies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 502
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await expect(client.listAgents("org_123")).rejects.toMatchObject({
+      name: "FinGuardApiError",
+      status: 502,
+      message: "FinGuard API returned an empty response body."
+    });
+  });
+
+  it("throws FinGuardApiError for invalid JSON responses", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("not-json", {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await expect(client.listAgents("org_123")).rejects.toMatchObject({
+      name: "FinGuardApiError",
+      status: 200,
+      message: "FinGuard API returned invalid JSON.",
+      body: "not-json"
+    });
   });
 
   it("checks a transaction", async () => {

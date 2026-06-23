@@ -27,6 +27,7 @@ export class FinGuardApiError extends Error {
     message: string,
     readonly status: number,
     readonly details?: unknown,
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "FinGuardApiError";
@@ -170,7 +171,7 @@ export class FinGuardClient {
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
-    const data = (await response.json()) as TResponse | ApiErrorBody;
+    const data = await this.parseResponseBody(response);
 
     if (!response.ok) {
       const errorBody = data as ApiErrorBody;
@@ -183,9 +184,32 @@ export class FinGuardClient {
         message,
         response.status,
         details,
+        data,
       );
     }
 
     return data as TResponse;
+  }
+
+  private async parseResponseBody(response: Response): Promise<unknown> {
+    const text = await response.text();
+
+    if (!text) {
+      throw new FinGuardApiError(
+        "FinGuard API returned an empty response body.",
+        response.status,
+      );
+    }
+
+    try {
+      return JSON.parse(text) as unknown;
+    } catch (error) {
+      throw new FinGuardApiError(
+        "FinGuard API returned invalid JSON.",
+        response.status,
+        error,
+        text,
+      );
+    }
   }
 }
