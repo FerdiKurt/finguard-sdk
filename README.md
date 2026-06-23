@@ -175,6 +175,14 @@ FinGuard SDK follows semantic versioning:
 After `1.0.0`, patch versions are bug fixes, minor versions are
 backward-compatible additions, and major versions contain breaking changes.
 
+## API Compatibility
+
+This SDK currently targets:
+
+```txt
+FinGuard API v0
+```
+
 ## Examples
 
 Public examples will live in the FinGuard examples repository. Until that
