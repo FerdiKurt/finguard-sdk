@@ -3,4 +3,5 @@ node_modules
 coverage
 .DS_Store
 *.log
+*.tgz
 SDK.md
