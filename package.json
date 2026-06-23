@@ -16,15 +16,20 @@
     "scripts": {
       "build": "tsup src/index.ts --format esm --dts --clean",
       "test": "vitest run",
-      "typecheck": "tsc --noEmit"
+      "typecheck": "tsc --noEmit",
+      "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
     },
     "engines": {
       "node": ">=18"
     },
     "devDependencies": {
-      "tsup": "latest",
-      "typescript": "latest",
-      "vitest": "latest"
+      "tsup": "8.5.1",
+      "typescript": "6.0.3",
+      "vitest": "4.1.9"
+    },
+    "pnpm": {
+      "overrides": {
+        "esbuild": "0.28.1"
+      }
     }
   }
-
