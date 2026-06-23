@@ -29,6 +29,89 @@ describe("FinGuardClient", () => {
     );
   });
 
+  it("sends requests without an API key when none is configured", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ agents: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await client.listAgents("org_123");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/agents?organizationId=org_123",
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          Authorization: expect.any(String)
+        })
+      })
+    );
+  });
+
+  it("encodes query params", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ agents: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await client.listAgents("org 123/abc");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/agents?organizationId=org+123%2Fabc",
+      expect.any(Object)
+    );
+  });
+
+  it("sends JSON request bodies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ agent: { id: "agent_123" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await client.createAgent({
+      organizationId: "org_123",
+      name: "Treasury Agent",
+      description: null,
+      status: "active"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/agents",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json"
+        }),
+        body: JSON.stringify({
+          organizationId: "org_123",
+          name: "Treasury Agent",
+          description: null,
+          status: "active"
+        })
+      })
+    );
+  });
+
   it("throws FinGuardApiError for API errors", async () => {
     const errorBody = {
       error: {
@@ -135,5 +218,45 @@ describe("FinGuardClient", () => {
 
     expect(result.decision.allowed).toBe(true);
     expect(result.transactionCheckId).toBe("check_123");
+  });
+
+  it("calls approval action endpoints", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(
+        JSON.stringify({
+          approvalRequest: { id: "approval_123" },
+          transactionCheck: { id: "check_123" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      ))
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock
+    });
+
+    await client.approveRequest("approval/123", { reason: "Looks good" });
+    await client.rejectRequest("approval/123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.finguard.dev/api/approvals/approval%2F123/approve",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ reason: "Looks good" })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.finguard.dev/api/approvals/approval%2F123/reject",
+      expect.objectContaining({
+        method: "POST",
+        body: undefined
+      })
+    );
   });
 });
