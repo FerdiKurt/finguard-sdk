@@ -12,17 +12,47 @@ agents and policies, checking transactions, and handling approval requests.
 pnpm add @finguard/sdk
 ```
 
+## Safety Model
+
+The SDK is a policy client, not a wallet, custodian, signer, or transaction
+broadcaster. It tells your application whether a proposed financial action is
+allowed, blocked, or waiting for human approval.
+
+Every financial tool exposed to an AI agent must call FinGuard before touching a
+wallet or execution service. Do not expose a raw wallet, token transfer,
+custodian, or blockchain broadcast tool beside the guarded tool. If an agent has
+both a guarded tool and an unguarded wallet tool, it can bypass FinGuard.
+
+The correct boundary is:
+
+1. Agent proposes a financial action.
+2. Your tool calls FinGuard with the exact action details.
+3. Your tool stops when FinGuard blocks or requires approval.
+4. Your tool executes only when `allowed === true` and `requiresApproval === false`.
+
 ## Basic Usage
 
 ```ts
-import { FinGuardClient } from "@finguard/sdk";
+import { createFinGuardGuardedAction, FinGuardClient } from "@finguard/sdk";
 
 const finGuard = new FinGuardClient({
   baseUrl: "https://your-finguard-api.com",
   apiKey: process.env.FINGUARD_API_KEY
 });
 
-const result = await finGuard.checkTransaction({
+async function sendUsdc(input: {
+  chain: string;
+  token: string;
+  amount: string;
+  recipient: string;
+}) {
+  // Call your wallet, custodian, or execution service here.
+  return { submitted: true, chain: input.chain };
+}
+
+const guardedPayment = createFinGuardGuardedAction(finGuard, sendUsdc);
+
+const result = await guardedPayment({
   organizationId: "org-id",
   agentId: "agent-id",
   action: "transfer",
@@ -32,10 +62,19 @@ const result = await finGuard.checkTransaction({
   recipient: "0x1111111111111111111111111111111111111111"
 });
 
-if (result.decision.allowed && !result.decision.requiresApproval) {
-  // Execute the transaction.
+if (result.status === "blocked") {
+  console.log({
+    reason: result.decision.reason,
+    matchedRules: result.decision.matchedRules,
+    transactionCheckId: result.transactionCheckId,
+    approvalRequestId: result.approvalRequestId
+  });
 }
 ```
+
+Blocked and approval-required decisions both return `status: "blocked"` and do
+not call your wallet executor. Approval-required results include
+`approvalRequestId`.
 
 ## API Keys
 
@@ -55,7 +94,9 @@ for protected endpoints.
 
 ## Transaction Checks
 
-Use `checkTransaction` before submitting a transaction:
+Use `checkTransaction` before submitting a transaction. For agent-facing
+financial tools, prefer `createFinGuardGuardedAction` so the wallet executor is
+not called on blocked or approval-required decisions:
 
 ```ts
 const result = await finGuard.checkTransaction({
@@ -68,8 +109,8 @@ const result = await finGuard.checkTransaction({
   recipient: "0x1111111111111111111111111111111111111111"
 });
 
-if (result.decision.requiresApproval && result.approvalRequestId) {
-  console.log("Approval required:", result.approvalRequestId);
+if (!result.decision.allowed || result.decision.requiresApproval) {
+  console.log("Stopped:", result.decision.reason, result.approvalRequestId);
 }
 ```
 
@@ -146,6 +187,7 @@ types are exported from the package root:
 import type {
   Agent,
   CreatePolicyInput,
+  GuardedFinancialActionResult,
   TransactionCheckResponse
 } from "@finguard/sdk";
 ```
