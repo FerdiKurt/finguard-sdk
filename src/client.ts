@@ -6,6 +6,8 @@ import type {
   CreateAgentInput,
   CreatePolicyInput,
   FinGuardClientOptions,
+  GuardedRelayExecutionInput,
+  GuardedRelayExecutionResponse,
   Policy,
   TransactionCheckInput,
   TransactionCheckResponse,
@@ -116,6 +118,16 @@ export class FinGuardClient {
       method: "POST",
       body: input,
     });
+  }
+
+  executeGuardedTransfer(input: GuardedRelayExecutionInput) {
+    return this.request<GuardedRelayExecutionResponse>(
+      "/api/executions/guarded-transfer",
+      {
+        method: "POST",
+        body: input,
+      },
+    );
   }
 
   listApprovals(organizationId: string) {

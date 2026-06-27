@@ -220,6 +220,70 @@ describe("FinGuardClient", () => {
     expect(result.transactionCheckId).toBe("check_123");
   });
 
+  it("executes guarded relay transfers with idempotency", async () => {
+    const responseBody = {
+      status: "submitted",
+      decision: {
+        allowed: true,
+        requiresApproval: false,
+        reason: "Allowed",
+        matchedRules: [],
+      },
+      transactionCheckId: "check_123",
+      approvalRequestId: null,
+      execution: {
+        id: "execution_123",
+        organizationId: "org_123",
+        agentId: "agent_123",
+        transactionCheckId: "check_123",
+        idempotencyKey: "invoice-123-payment-1",
+        policyId: "policy_123",
+        policyVersionId: "policy_version_123",
+        action: "transfer",
+        status: "submitted",
+        chain: "ethereum-sepolia",
+        token: "USDC",
+        amount: "1",
+        recipient: "0x1111111111111111111111111111111111111111",
+        txHash: `0x${"a".repeat(64)}`,
+        blockNumber: "11137617",
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+
+    const input = {
+      organizationId: "org_123",
+      agentId: "agent_123",
+      idempotencyKey: "invoice-123-payment-1",
+      action: "transfer",
+      chain: "ethereum-sepolia",
+      token: "USDC",
+      amount: "1",
+      recipient: "0x1111111111111111111111111111111111111111",
+      relayWalletId: "relay_wallet_123",
+      dryRun: false,
+    };
+
+    await expect(client.executeGuardedTransfer(input)).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/executions/guarded-transfer",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    );
+  });
+
   it("calls approval action endpoints", async () => {
     const fetchMock = vi.fn().mockImplementation(() =>
       Promise.resolve(new Response(

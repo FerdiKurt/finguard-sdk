@@ -145,6 +145,12 @@ export type TransactionCheckInput = {
   recipient: string;
 };
 
+export type GuardedRelayExecutionInput = TransactionCheckInput & {
+  idempotencyKey: string;
+  relayWalletId?: string;
+  dryRun?: boolean;
+};
+
 export type PolicyDecision = {
   allowed: boolean;
   requiresApproval: boolean;
@@ -197,3 +203,71 @@ export type ApprovalActionResponse = {
   approvalRequest: ApprovalRequest;
   transactionCheck: TransactionCheck;
 };
+
+export type GuardedRelayExecution = {
+  id: string;
+  organizationId: string;
+  agentId: string;
+  transactionCheckId: string;
+  idempotencyKey: string;
+  policyId: string | null;
+  policyVersionId: string | null;
+  action: string;
+  status: "pending" | "submitted" | "confirmed" | "failed";
+  chain: string;
+  token: string;
+  amount: string;
+  recipient: string;
+  txHash: string | null;
+  blockNumber: string | null;
+  error?: string | null;
+  failureReason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  submittedAt?: string | null;
+  confirmedAt?: string | null;
+  failedAt?: string | null;
+};
+
+export type GuardedRelayUnsignedPayload = {
+  chain: string;
+  chainId: number;
+  to: string;
+  value: string;
+  data: `0x${string}`;
+};
+
+export type GuardedRelayExecutionResponse =
+  | {
+      status: "prepared";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: null;
+      execution: GuardedRelayExecution;
+      unsignedPayload: GuardedRelayUnsignedPayload;
+      dryRun: true;
+    }
+  | {
+      status: "submitted" | "confirmed";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: null;
+      execution: GuardedRelayExecution;
+    }
+  | {
+      status: "failed";
+      transactionCheckId: string;
+      execution: GuardedRelayExecution;
+    }
+  | {
+      status: "blocked" | "approval_required";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: string | null;
+    }
+  | {
+      status: GuardedRelayExecution["status"];
+      execution: GuardedRelayExecution;
+      transactionCheckId: string;
+      idempotentReplay: true;
+    };

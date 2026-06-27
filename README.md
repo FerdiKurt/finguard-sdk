@@ -30,6 +30,12 @@ The correct boundary is:
 3. Your tool stops when FinGuard blocks or requires approval.
 4. Your tool executes only when `allowed === true` and `requiresApproval === false`.
 
+For hosted relay flows, prefer `executeGuardedTransfer` over exposing a wallet
+tool directly. The relay endpoint performs the FinGuard check and creates the
+execution record in one idempotent API call. Your agent should receive only this
+guarded tool, not a separate unrestricted wallet, private-key, or RPC broadcast
+tool.
+
 ## Basic Usage
 
 ```ts
@@ -114,6 +120,42 @@ if (!result.decision.allowed || result.decision.requiresApproval) {
 }
 ```
 
+## Guarded Relay Execution
+
+Use `executeGuardedTransfer` when the FinGuard API is the only path that can
+prepare or submit the transfer:
+
+```ts
+const result = await finGuard.executeGuardedTransfer({
+  organizationId: "org-id",
+  agentId: "agent-id",
+  idempotencyKey: "invoice-123-payment-1",
+  action: "transfer",
+  chain: "ethereum-sepolia",
+  token: "USDC",
+  amount: "1",
+  recipient: "0x1111111111111111111111111111111111111111",
+  relayWalletId: "relay-wallet-id",
+  dryRun: true
+});
+
+if (result.status === "prepared") {
+  console.log(result.unsignedPayload);
+}
+
+if (result.status === "submitted" || result.status === "confirmed") {
+  console.log(result.execution.txHash);
+}
+
+if (result.status === "blocked" || result.status === "approval_required") {
+  console.log(result.decision.reason, result.approvalRequestId);
+}
+```
+
+Use a unique `idempotencyKey` for each logical transaction attempt, such as an
+invoice payment ID. Retrying the same key returns the existing execution instead
+of creating a duplicate transfer.
+
 ## Approval Flow
 
 List, approve, and reject approval requests:
@@ -188,6 +230,7 @@ import type {
   Agent,
   CreatePolicyInput,
   GuardedFinancialActionResult,
+  GuardedRelayExecutionResponse,
   TransactionCheckResponse
 } from "@finguard/sdk";
 ```
