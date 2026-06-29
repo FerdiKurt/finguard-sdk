@@ -9,6 +9,14 @@ export type FinGuardClientOptions = {
 export type AgentStatus = "active" | "paused";
 export type PolicyStatus = "active" | "disabled";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type SafeWalletStatus = "active" | "disabled";
+export type SafeWalletMode = "proposal_only";
+export type SafeProposalStatus =
+  | "proposed"
+  | "confirmed"
+  | "executed"
+  | "failed"
+  | "cancelled";
 
 export type AgentPolicy = {
   maxTransactionAmount: string;
@@ -143,6 +151,95 @@ export type TransactionCheckInput = {
   token: string;
   amount: string;
   recipient: string;
+};
+
+export type SafeWallet = {
+  id: string;
+  organizationId: string;
+  name: string;
+  chain: string;
+  chainId: number;
+  address: string;
+  mode: SafeWalletMode;
+  status: SafeWalletStatus;
+  threshold: number | null;
+  owners: string[];
+  agentId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  disabledAt: string | null;
+};
+
+export type SafeProposal = {
+  id: string;
+  organizationId: string;
+  agentId: string;
+  safeWalletId: string;
+  transactionCheckId: string;
+  transactionExecutionId: string | null;
+  idempotencyKey: string | null;
+  safeTxHash: string | null;
+  chain: string;
+  chainId: number;
+  safeAddress: string;
+  to: string;
+  value: string;
+  data: string;
+  operation: number;
+  status: SafeProposalStatus;
+  payloadJson: unknown;
+  metadataJson: unknown;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  proposedAt: string | null;
+  confirmedAt: string | null;
+  executedAt: string | null;
+  failedAt: string | null;
+};
+
+export type ListSafeProposalFilters = {
+  status?: SafeProposalStatus;
+  safeWalletId?: string;
+  agentId?: string;
+};
+
+export type CreateSafeProposalInput = TransactionCheckInput & {
+  idempotencyKey: string;
+  safeWalletId?: string;
+};
+
+export type CreateSafeProposalResponse =
+  | {
+      status: "proposed";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: null;
+      safeProposal: SafeProposal;
+    }
+  | {
+      status: "blocked" | "approval_required";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: string | null;
+    }
+  | {
+      status: SafeProposalStatus;
+      safeProposal: SafeProposal;
+      transactionCheckId: string;
+      idempotentReplay: true;
+    };
+
+export type SyncSafeProposalsInput = {
+  organizationId: string;
+  safeProposalIds?: string[];
+  status?: SafeProposalStatus;
+  limit?: number;
+};
+
+export type SyncSafeProposalsResponse = {
+  synced: SafeProposal[];
+  skipped: Array<{ safeProposalId: string; reason: string }>;
 };
 
 export type GuardedRelayExecutionInput = TransactionCheckInput & {

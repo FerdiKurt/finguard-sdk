@@ -284,6 +284,131 @@ describe("FinGuardClient", () => {
     );
   });
 
+  it("lists Safe wallets", async () => {
+    const responseBody = { safeWallets: [] };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+
+    await expect(client.listSafeWallets("org_123")).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/safe-wallets?organizationId=org_123",
+      expect.any(Object)
+    );
+  });
+
+  it("creates Safe proposals through proposal-only flow", async () => {
+    const responseBody = {
+      status: "proposed",
+      decision: {
+        allowed: true,
+        requiresApproval: false,
+        reason: "Allowed",
+        matchedRules: [],
+      },
+      transactionCheckId: "check_123",
+      approvalRequestId: null,
+      safeProposal: { id: "safe_proposal_123" },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+
+    const input = {
+      organizationId: "org_123",
+      agentId: "agent_123",
+      idempotencyKey: "invoice-123-safe-proposal-1",
+      action: "transfer",
+      chain: "ethereum-sepolia",
+      token: "USDC",
+      amount: "1",
+      recipient: "0x1111111111111111111111111111111111111111",
+      safeWalletId: "safe_wallet_123",
+    };
+
+    await expect(client.createSafeProposal(input)).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/safe-proposals",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    );
+  });
+
+  it("lists Safe proposals with filters", async () => {
+    const responseBody = { safeProposals: [] };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.listSafeProposals("org_123", {
+        status: "proposed",
+        safeWalletId: "safe_wallet_123",
+        agentId: "agent_123",
+      })
+    ).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/safe-proposals/list?organizationId=org_123&status=proposed&safeWalletId=safe_wallet_123&agentId=agent_123",
+      expect.any(Object)
+    );
+  });
+
+  it("syncs Safe proposals", async () => {
+    const responseBody = { synced: [], skipped: [] };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+
+    const input = {
+      organizationId: "org_123",
+      status: "proposed" as const,
+      limit: 20,
+    };
+
+    await expect(client.syncSafeProposals(input)).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/safe-proposals/sync",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    );
+  });
+
   it("calls approval action endpoints", async () => {
     const fetchMock = vi.fn().mockImplementation(() =>
       Promise.resolve(new Response(

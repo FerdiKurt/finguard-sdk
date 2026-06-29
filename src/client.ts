@@ -4,11 +4,18 @@ import type {
   ApprovalActionResponse,
   ApprovalRequest,
   CreateAgentInput,
+  CreateSafeProposalInput,
+  CreateSafeProposalResponse,
   CreatePolicyInput,
   FinGuardClientOptions,
   GuardedRelayExecutionInput,
   GuardedRelayExecutionResponse,
+  ListSafeProposalFilters,
   Policy,
+  SafeProposal,
+  SafeWallet,
+  SyncSafeProposalsInput,
+  SyncSafeProposalsResponse,
   TransactionCheckInput,
   TransactionCheckResponse,
   UpdateAgentInput,
@@ -128,6 +135,51 @@ export class FinGuardClient {
         body: input,
       },
     );
+  }
+
+  listSafeWallets(organizationId: string) {
+    const searchParams = new URLSearchParams({ organizationId });
+
+    return this.request<{ safeWallets: SafeWallet[] }>(
+      `/api/safe-wallets?${searchParams.toString()}`,
+    );
+  }
+
+  createSafeProposal(input: CreateSafeProposalInput) {
+    return this.request<CreateSafeProposalResponse>("/api/safe-proposals", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  listSafeProposals(
+    organizationId: string,
+    filters: ListSafeProposalFilters = {},
+  ) {
+    const searchParams = new URLSearchParams({ organizationId });
+
+    if (filters.status) {
+      searchParams.set("status", filters.status);
+    }
+
+    if (filters.safeWalletId) {
+      searchParams.set("safeWalletId", filters.safeWalletId);
+    }
+
+    if (filters.agentId) {
+      searchParams.set("agentId", filters.agentId);
+    }
+
+    return this.request<{ safeProposals: SafeProposal[] }>(
+      `/api/safe-proposals/list?${searchParams.toString()}`,
+    );
+  }
+
+  syncSafeProposals(input: SyncSafeProposalsInput) {
+    return this.request<SyncSafeProposalsResponse>("/api/safe-proposals/sync", {
+      method: "POST",
+      body: input,
+    });
   }
 
   listApprovals(organizationId: string) {

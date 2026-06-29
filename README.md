@@ -156,6 +156,56 @@ Use a unique `idempotencyKey` for each logical transaction attempt, such as an
 invoice payment ID. Retrying the same key returns the existing execution instead
 of creating a duplicate transfer.
 
+## Safe Proposal Flow
+
+Use Safe proposal mode when the agent should never receive a wallet key and
+FinGuard should create a Safe transaction proposal only after policy approval.
+Owners still review, sign, and execute in Safe.
+
+```ts
+const result = await finGuard.createSafeProposal({
+  organizationId: "org-id",
+  agentId: "agent-id",
+  idempotencyKey: "invoice-123-safe-proposal-1",
+  action: "transfer",
+  chain: "ethereum-sepolia",
+  token: "USDC",
+  amount: "1",
+  recipient: "0x1111111111111111111111111111111111111111",
+  safeWalletId: "safe-wallet-id"
+});
+
+if (result.status === "proposed") {
+  console.log(result.safeProposal.safeTxHash);
+}
+
+if (result.status === "blocked" || result.status === "approval_required") {
+  console.log(result.decision.reason, result.approvalRequestId);
+}
+```
+
+You can inspect Safe configuration and proposal lifecycle from the SDK:
+
+```ts
+const { safeWallets } = await finGuard.listSafeWallets("org-id");
+const { safeProposals } = await finGuard.listSafeProposals("org-id", {
+  status: "proposed"
+});
+
+await finGuard.syncSafeProposals({
+  organizationId: "org-id",
+  status: "proposed",
+  limit: 20
+});
+```
+
+Use a unique `idempotencyKey` for each logical Safe proposal attempt. Retrying
+the same key returns the existing proposal instead of creating a duplicate Safe
+transaction.
+
+Full OpenAI Agent, LangChain, CrewAI, and Safe testnet examples will live in a
+separate public examples repository when that repo is created.
+
 ## Approval Flow
 
 List, approve, and reject approval requests:
@@ -228,9 +278,12 @@ types are exported from the package root:
 ```ts
 import type {
   Agent,
+  CreateSafeProposalResponse,
   CreatePolicyInput,
   GuardedFinancialActionResult,
   GuardedRelayExecutionResponse,
+  SafeProposal,
+  SafeWallet,
   TransactionCheckResponse
 } from "@finguard/sdk";
 ```
