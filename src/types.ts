@@ -18,6 +18,14 @@ export type SafeProposalStatus =
   | "failed"
   | "cancelled";
 
+export type SmartAccountStatus = "active" | "disabled";
+export type SmartAccountSessionKeyStatus = "active" | "revoked" | "expired";
+export type ExecutionMode =
+  | "check_only"
+  | "relay"
+  | "safe_proposal"
+  | "zerodev_session_keys";
+
 export type AgentPolicy = {
   maxTransactionAmount: string;
   dailyLimit: string;
@@ -248,6 +256,141 @@ export type GuardedRelayExecutionInput = TransactionCheckInput & {
   dryRun?: boolean;
 };
 
+export type SmartAccount = {
+  id: string;
+  organizationId: string;
+  name: string;
+  provider: "zerodev";
+  chain: "ethereum-sepolia";
+  chainId: 11155111;
+  address: string;
+  status: SmartAccountStatus;
+  metadataJson: unknown;
+  createdAt: string;
+  updatedAt: string;
+  disabledAt: string | null;
+};
+
+export type CreateSmartAccountInput = {
+  organizationId: string;
+  name: string;
+  provider: "zerodev";
+  chain: "ethereum-sepolia";
+  chainId: 11155111;
+  address: string;
+  metadataJson?: Record<string, unknown>;
+};
+
+export type SessionPermissionDraft = {
+  provider: "zerodev";
+  chain: "ethereum-sepolia";
+  chainId: 11155111;
+  action: "erc20.transfer";
+  token: {
+    symbol: "USDC";
+    address: `0x${string}`;
+    decimals: number;
+  };
+  contractAddress: `0x${string}`;
+  functionSelector: `0x${string}`;
+  allowedRecipients: `0x${string}`[];
+  perTransactionLimit: {
+    amount: string;
+    amountUnits: string;
+    decimals: number;
+  };
+  validity: {
+    validAfter: string | null;
+    validUntil: string | null;
+  };
+  offchainRequiredRules: Array<
+    "dailyLimit" | "requiresApprovalAbove" | "dslPolicy" | "unsupportedPolicy"
+  >;
+  fallbackBehavior: "require_finguard_check";
+};
+
+export type SmartAccountSessionKey = {
+  id: string;
+  organizationId: string;
+  smartAccountId: string;
+  agentId: string;
+  policyId: string | null;
+  policyVersionId: string | null;
+  publicKey: string;
+  keyReference: string | null;
+  status: SmartAccountSessionKeyStatus;
+  permissionsJson: SessionPermissionDraft | unknown;
+  metadataJson: unknown;
+  issuedAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IssueSmartAccountSessionKeyInput = {
+  organizationId: string;
+  smartAccountId: string;
+  agentId: string;
+  publicKey: string;
+  keyReference?: string | null;
+  expiresAt: string;
+  validAfter?: string | null;
+  validUntil?: string | null;
+  metadataJson?: Record<string, unknown>;
+};
+
+export type ListSmartAccountSessionKeyFilters = {
+  smartAccountId?: string;
+  agentId?: string;
+  status?: SmartAccountSessionKeyStatus;
+};
+
+export type RevokeSmartAccountSessionKeyInput = {
+  organizationId: string;
+  reason?: string;
+  revokedBy?: string;
+  metadataJson?: Record<string, unknown>;
+};
+
+export type SmartAccountSessionKeyRevocation = {
+  id: string;
+  organizationId: string;
+  smartAccountId: string;
+  sessionKeyId: string;
+  agentId: string;
+  reason: string | null;
+  revokedBy: string | null;
+  metadataJson: unknown;
+  createdAt: string;
+};
+
+export type ZeroDevUserOperationDraft = {
+  provider: "zerodev";
+  chain: "ethereum-sepolia";
+  chainId: 11155111;
+  sender: `0x${string}`;
+  sessionKeyId: string;
+  sessionPublicKey: `0x${string}`;
+  target: `0x${string}`;
+  value: string;
+  data: `0x${string}`;
+  permission: {
+    action: "erc20.transfer";
+    token: "USDC";
+    recipient: `0x${string}`;
+    amount: string;
+  };
+};
+
+export type AccountAbstractionExecutionInput = TransactionCheckInput & {
+  idempotencyKey: string;
+  smartAccountId: string;
+  sessionKeyId: string;
+  dryRun?: boolean;
+};
+
 export type PolicyDecision = {
   allowed: boolean;
   requiresApproval: boolean;
@@ -306,6 +449,8 @@ export type GuardedRelayExecution = {
   organizationId: string;
   agentId: string;
   transactionCheckId: string;
+  smartAccountId?: string | null;
+  smartAccountSessionKeyId?: string | null;
   idempotencyKey: string;
   policyId: string | null;
   policyVersionId: string | null;
@@ -325,6 +470,48 @@ export type GuardedRelayExecution = {
   confirmedAt?: string | null;
   failedAt?: string | null;
 };
+
+
+export type AccountAbstractionExecution = GuardedRelayExecution & {
+  smartAccountId: string;
+  smartAccountSessionKeyId: string;
+};
+
+export type AccountAbstractionExecutionResponse =
+  | {
+      status: "prepared";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: null;
+      execution: AccountAbstractionExecution;
+      userOperationDraft: ZeroDevUserOperationDraft;
+      dryRun: true;
+    }
+  | {
+      status: "submitted";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: null;
+      execution: AccountAbstractionExecution;
+      userOperationHash: `0x${string}`;
+    }
+  | {
+      status: "failed";
+      transactionCheckId: string;
+      execution: AccountAbstractionExecution;
+    }
+  | {
+      status: "blocked" | "approval_required";
+      decision: PolicyDecision;
+      transactionCheckId: string;
+      approvalRequestId: string | null;
+    }
+  | {
+      status: AccountAbstractionExecution["status"];
+      execution: AccountAbstractionExecution;
+      transactionCheckId: string;
+      idempotentReplay: true;
+    };
 
 export type GuardedRelayUnsignedPayload = {
   chain: string;

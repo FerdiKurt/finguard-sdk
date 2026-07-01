@@ -156,6 +156,76 @@ Use a unique `idempotencyKey` for each logical transaction attempt, such as an
 invoice payment ID. Retrying the same key returns the existing execution instead
 of creating a duplicate transfer.
 
+
+## Account Abstraction Session Keys
+
+Use account abstraction mode when an agent should act through a constrained
+smart account session key. Start with dry-run mode on Ethereum Sepolia; the
+backend will return a ZeroDev-style user-operation draft without broadcasting.
+
+```ts
+const result = await finGuard.executeAccountAbstraction({
+  organizationId: "org-id",
+  agentId: "agent-id",
+  idempotencyKey: "invoice-123-aa-1",
+  smartAccountId: "smart-account-id",
+  sessionKeyId: "session-key-id",
+  action: "transfer",
+  chain: "ethereum-sepolia",
+  token: "USDC",
+  amount: "1",
+  recipient: "0x1111111111111111111111111111111111111111",
+  dryRun: true
+});
+
+if (result.status === "prepared") {
+  console.log(result.userOperationDraft);
+}
+
+if (result.status === "submitted") {
+  console.log(result.userOperationHash);
+}
+
+if (result.status === "blocked" || result.status === "approval_required") {
+  console.log(result.decision.reason, result.approvalRequestId);
+}
+```
+
+The SDK also exposes setup and inspection helpers:
+
+```ts
+await finGuard.createSmartAccount({
+  organizationId: "org-id",
+  name: "ZeroDev Sepolia Account",
+  provider: "zerodev",
+  chain: "ethereum-sepolia",
+  chainId: 11155111,
+  address: "0x2222222222222222222222222222222222222222"
+});
+
+await finGuard.issueSmartAccountSessionKey({
+  organizationId: "org-id",
+  smartAccountId: "smart-account-id",
+  agentId: "agent-id",
+  publicKey: "0x3333333333333333333333333333333333333333",
+  expiresAt: "2026-08-01T00:00:00.000Z"
+});
+
+const { sessionKeys } = await finGuard.listSmartAccountSessionKeys("org-id", {
+  smartAccountId: "smart-account-id",
+  status: "active"
+});
+
+await finGuard.revokeSmartAccountSessionKey(sessionKeys[0].id, {
+  organizationId: "org-id",
+  reason: "Rotated key"
+});
+```
+
+Do not expose a separate signing, private-key, or unrestricted wallet tool to the
+same agent. The agent-facing tool should call FinGuard first and should only use
+a session key whose permissions match the policy.
+
 ## Safe Proposal Flow
 
 Use Safe proposal mode when the agent should never receive a wallet key and

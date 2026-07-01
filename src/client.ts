@@ -1,19 +1,29 @@
 import type {
+  AccountAbstractionExecutionInput,
+  AccountAbstractionExecutionResponse,
   Agent,
   ApprovalActionInput,
   ApprovalActionResponse,
   ApprovalRequest,
   CreateAgentInput,
+  CreateSmartAccountInput,
   CreateSafeProposalInput,
   CreateSafeProposalResponse,
   CreatePolicyInput,
   FinGuardClientOptions,
   GuardedRelayExecutionInput,
   GuardedRelayExecutionResponse,
+  IssueSmartAccountSessionKeyInput,
+  ListSmartAccountSessionKeyFilters,
   ListSafeProposalFilters,
   Policy,
   SafeProposal,
+  RevokeSmartAccountSessionKeyInput,
   SafeWallet,
+  SmartAccount,
+  SmartAccountSessionKey,
+  SmartAccountSessionKeyRevocation,
+  SmartAccountStatus,
   SyncSafeProposalsInput,
   SyncSafeProposalsResponse,
   TransactionCheckInput,
@@ -130,6 +140,81 @@ export class FinGuardClient {
   executeGuardedTransfer(input: GuardedRelayExecutionInput) {
     return this.request<GuardedRelayExecutionResponse>(
       "/api/executions/guarded-transfer",
+      {
+        method: "POST",
+        body: input,
+      },
+    );
+  }
+
+  createSmartAccount(input: CreateSmartAccountInput) {
+    return this.request<{ smartAccount: SmartAccount }>("/api/smart-accounts", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  listSmartAccounts(organizationId: string, status?: SmartAccountStatus) {
+    const searchParams = new URLSearchParams({ organizationId });
+
+    if (status) {
+      searchParams.set("status", status);
+    }
+
+    return this.request<{ smartAccounts: SmartAccount[] }>(
+      `/api/smart-accounts?${searchParams.toString()}`,
+    );
+  }
+
+  issueSmartAccountSessionKey(input: IssueSmartAccountSessionKeyInput) {
+    return this.request<{ sessionKey: SmartAccountSessionKey }>(
+      "/api/smart-account-session-keys",
+      {
+        method: "POST",
+        body: input,
+      },
+    );
+  }
+
+  listSmartAccountSessionKeys(
+    organizationId: string,
+    filters: ListSmartAccountSessionKeyFilters = {},
+  ) {
+    const searchParams = new URLSearchParams({ organizationId });
+
+    if (filters.smartAccountId) {
+      searchParams.set("smartAccountId", filters.smartAccountId);
+    }
+
+    if (filters.agentId) {
+      searchParams.set("agentId", filters.agentId);
+    }
+
+    if (filters.status) {
+      searchParams.set("status", filters.status);
+    }
+
+    return this.request<{ sessionKeys: SmartAccountSessionKey[] }>(
+      `/api/smart-account-session-keys?${searchParams.toString()}`,
+    );
+  }
+
+  revokeSmartAccountSessionKey(
+    id: string,
+    input: RevokeSmartAccountSessionKeyInput,
+  ) {
+    return this.request<{
+      sessionKey: SmartAccountSessionKey;
+      revocation: SmartAccountSessionKeyRevocation | null;
+    }>(`/api/smart-account-session-keys/${encodeURIComponent(id)}/revoke`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  executeAccountAbstraction(input: AccountAbstractionExecutionInput) {
+    return this.request<AccountAbstractionExecutionResponse>(
+      "/api/executions/account-abstraction",
       {
         method: "POST",
         body: input,

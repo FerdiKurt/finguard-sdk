@@ -284,6 +284,244 @@ describe("FinGuardClient", () => {
     );
   });
 
+
+  it("manages smart accounts", async () => {
+    const smartAccount = {
+      id: "smart_account_123",
+      organizationId: "org_123",
+      name: "ZeroDev Sepolia Account",
+      provider: "zerodev",
+      chain: "ethereum-sepolia",
+      chainId: 11155111,
+      address: "0x2222222222222222222222222222222222222222",
+      status: "active",
+      metadataJson: {},
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      disabledAt: null,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ smartAccount }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ smartAccounts: [smartAccount] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+    const input = {
+      organizationId: "org_123",
+      name: smartAccount.name,
+      provider: "zerodev" as const,
+      chain: "ethereum-sepolia" as const,
+      chainId: 11155111 as const,
+      address: smartAccount.address,
+    };
+
+    await expect(client.createSmartAccount(input)).resolves.toEqual({ smartAccount });
+    await expect(client.listSmartAccounts("org_123", "active")).resolves.toEqual({
+      smartAccounts: [smartAccount],
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.finguard.dev/api/smart-accounts",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.finguard.dev/api/smart-accounts?organizationId=org_123&status=active",
+      expect.any(Object)
+    );
+  });
+
+  it("manages smart account session keys", async () => {
+    const sessionKey = {
+      id: "session_key_123",
+      organizationId: "org_123",
+      smartAccountId: "smart_account_123",
+      agentId: "agent_123",
+      policyId: "policy_123",
+      policyVersionId: "policy_version_123",
+      publicKey: "0x3333333333333333333333333333333333333333",
+      keyReference: "env://ZERODEV_AGENT_SESSION_PUBLIC_KEY",
+      status: "active",
+      permissionsJson: { provider: "zerodev" },
+      metadataJson: {},
+      issuedAt: "2026-07-01T00:00:00.000Z",
+      expiresAt: "2026-08-01T00:00:00.000Z",
+      lastUsedAt: null,
+      revokedAt: null,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionKey }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionKeys: [sessionKey] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        sessionKey: { ...sessionKey, status: "revoked", revokedAt: "2026-07-01T00:30:00.000Z" },
+        revocation: {
+          id: "revocation_123",
+          organizationId: "org_123",
+          smartAccountId: "smart_account_123",
+          sessionKeyId: "session_key_123",
+          agentId: "agent_123",
+          reason: "Rotated key",
+          revokedBy: "sdk-test",
+          metadataJson: {},
+          createdAt: "2026-07-01T00:30:00.000Z",
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+    const issueInput = {
+      organizationId: "org_123",
+      smartAccountId: "smart_account_123",
+      agentId: "agent_123",
+      publicKey: sessionKey.publicKey,
+      keyReference: sessionKey.keyReference,
+      expiresAt: sessionKey.expiresAt,
+    };
+
+    await expect(client.issueSmartAccountSessionKey(issueInput)).resolves.toEqual({ sessionKey });
+    await expect(client.listSmartAccountSessionKeys("org_123", {
+      smartAccountId: "smart_account_123",
+      agentId: "agent_123",
+      status: "active",
+    })).resolves.toEqual({ sessionKeys: [sessionKey] });
+    await expect(client.revokeSmartAccountSessionKey("session_key_123", {
+      organizationId: "org_123",
+      reason: "Rotated key",
+      revokedBy: "sdk-test",
+    })).resolves.toMatchObject({
+      sessionKey: { id: "session_key_123", status: "revoked" },
+      revocation: { sessionKeyId: "session_key_123" },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.finguard.dev/api/smart-account-session-keys",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(issueInput) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.finguard.dev/api/smart-account-session-keys?organizationId=org_123&smartAccountId=smart_account_123&agentId=agent_123&status=active",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.finguard.dev/api/smart-account-session-keys/session_key_123/revoke",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          organizationId: "org_123",
+          reason: "Rotated key",
+          revokedBy: "sdk-test",
+        }),
+      })
+    );
+  });
+
+  it("executes account abstraction transfers in dry-run mode", async () => {
+    const responseBody = {
+      status: "prepared",
+      decision: {
+        allowed: true,
+        requiresApproval: false,
+        reason: "Allowed",
+        matchedRules: [],
+      },
+      transactionCheckId: "check_123",
+      approvalRequestId: null,
+      execution: {
+        id: "execution_123",
+        organizationId: "org_123",
+        agentId: "agent_123",
+        transactionCheckId: "check_123",
+        smartAccountId: "smart_account_123",
+        smartAccountSessionKeyId: "session_key_123",
+        idempotencyKey: "invoice-123-aa-1",
+        policyId: "policy_123",
+        policyVersionId: "policy_version_123",
+        action: "transfer",
+        status: "pending",
+        chain: "ethereum-sepolia",
+        token: "USDC",
+        amount: "1",
+        recipient: "0x1111111111111111111111111111111111111111",
+        txHash: null,
+        blockNumber: null,
+        failureReason: null,
+      },
+      userOperationDraft: {
+        provider: "zerodev",
+        chain: "ethereum-sepolia",
+        chainId: 11155111,
+        sender: "0x2222222222222222222222222222222222222222",
+        sessionKeyId: "session_key_123",
+        sessionPublicKey: "0x3333333333333333333333333333333333333333",
+        target: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        value: "0",
+        data: "0x1234",
+        permission: {
+          action: "erc20.transfer",
+          token: "USDC",
+          recipient: "0x1111111111111111111111111111111111111111",
+          amount: "1",
+        },
+      },
+      dryRun: true,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const client = new FinGuardClient({
+      baseUrl: "https://api.finguard.dev",
+      fetch: fetchMock,
+    });
+    const input = {
+      organizationId: "org_123",
+      agentId: "agent_123",
+      idempotencyKey: "invoice-123-aa-1",
+      smartAccountId: "smart_account_123",
+      sessionKeyId: "session_key_123",
+      action: "transfer",
+      chain: "ethereum-sepolia",
+      token: "USDC",
+      amount: "1",
+      recipient: "0x1111111111111111111111111111111111111111",
+      dryRun: true,
+    };
+
+    await expect(client.executeAccountAbstraction(input)).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.finguard.dev/api/executions/account-abstraction",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    );
+  });
+
   it("lists Safe wallets", async () => {
     const responseBody = { safeWallets: [] };
     const fetchMock = vi.fn().mockResolvedValue(
