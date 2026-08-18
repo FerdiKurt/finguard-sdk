@@ -1,35 +1,40 @@
-  {
-    "name": "@finguard/sdk",
-    "version": "0.1.0",
-    "description": "TypeScript SDK for FinGuard policy checks and approvals.",
-    "type": "module",
-    "sideEffects": false,
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
-      }
-    },
-    "files": ["dist", "README.md", "LICENSE"],
-    "scripts": {
-      "build": "tsup src/index.ts --format esm --dts --clean",
-      "test": "vitest run",
-      "typecheck": "tsc --noEmit",
-      "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
-    },
-    "engines": {
-      "node": ">=18"
-    },
-    "devDependencies": {
-      "tsup": "8.5.1",
-      "typescript": "6.0.3",
-      "vitest": "4.1.9"
-    },
-    "pnpm": {
-      "overrides": {
-        "esbuild": "0.28.1"
-      }
+{
+  "name": "@finguard/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for FinGuard policy checks and approvals.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.3",
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.28.1"
     }
   }
+}

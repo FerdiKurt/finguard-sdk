@@ -8,8 +8,9 @@
       "declaration": true,
       "declarationMap": true,
       "sourceMap": true,
-      "skipLibCheck": true,
-      "ignoreDeprecations": "6.0",
+    "skipLibCheck": true,
+    "types": ["node"],
+    "ignoreDeprecations": "6.0",
       "noEmit": true
     },
     "include": ["src", "test"]
