@@ -6,6 +6,19 @@ FinGuard helps applications evaluate transaction intent against organization and
 agent policies before execution. The SDK provides a typed client for creating
 agents and policies, checking transactions, and handling approval requests.
 
+It also includes a standalone provider-independent core for local validation:
+
+```text
+FinancialIntent
+  -> FinancialPolicy decision
+  -> enforcement coverage
+  -> signed authorization envelope
+  -> adapter/connector verification
+```
+
+The standalone core does not require the dashboard, API server, database, wallet
+keys, RPC endpoints, or payment credentials.
+
 ## Installation
 
 ```bash
@@ -14,9 +27,14 @@ pnpm add @finguard/sdk
 
 ## Safety Model
 
-The SDK is a policy client, not a wallet, custodian, signer, or transaction
-broadcaster. It tells your application whether a proposed financial action is
-allowed, blocked, or waiting for human approval.
+The SDK is a policy and authorization client, not a wallet, custodian, spending
+signer, or transaction broadcaster. It can evaluate and sign FinGuard
+authorization evidence, but that signature authorizes a FinGuard policy result,
+not blockchain spending by itself.
+
+Execution stays with wallet, Safe, account-abstraction, payment, or
+customer-hosted connector infrastructure. Provider adapters should verify the
+authorization envelope before moving money or creating proposals.
 
 Every financial tool exposed to an AI agent must call FinGuard before touching a
 wallet or execution service. Do not expose a raw wallet, token transfer,
@@ -27,8 +45,12 @@ The correct boundary is:
 
 1. Agent proposes a financial action.
 2. Your tool calls FinGuard with the exact action details.
-3. Your tool stops when FinGuard blocks or requires approval.
-4. Your tool executes only when `allowed === true` and `requiresApproval === false`.
+3. FinGuard returns or builds a decision bound to that exact intent.
+4. Your tool creates or receives a signed authorization envelope.
+5. Your connector verifies the envelope against the supplied intent.
+6. Your tool stops when FinGuard blocks, requires missing approval, or
+   verification fails.
+7. Your tool executes only after successful verification.
 
 For hosted relay flows, prefer `executeGuardedTransfer` over exposing a wallet
 tool directly. The relay endpoint performs the FinGuard check and creates the
@@ -81,6 +103,170 @@ if (result.status === "blocked") {
 Blocked and approval-required decisions both return `status: "blocked"` and do
 not call your wallet executor. Approval-required results include
 `approvalRequestId`.
+
+## Provider-Independent Core
+
+Use the core helpers when you want to run FinGuard's authorization model without
+starting the hosted API or dashboard:
+
+```ts
+import {
+  createAuthorizationEnvelope,
+  createFinancialIntent,
+  createHmacAuthorizationSigner,
+  evaluateFinancialPolicy,
+  planEnforcementCoverage,
+  signAuthorizationEnvelope,
+  verifyAuthorizationEnvelope,
+  type FinancialPolicy
+} from "@finguard/sdk";
+
+const intent = createFinancialIntent({
+  intentId: "intent-1",
+  organizationId: "org-1",
+  actor: {
+    id: "agent-1",
+    type: "agent",
+    roles: ["treasury"]
+  },
+  action: "asset.transfer",
+  source: {
+    accountId: "safe-1",
+    provider: "safe",
+    address: "0x0000000000000000000000000000000000000001"
+  },
+  destination: {
+    address: "0x0000000000000000000000000000000000000002",
+    counterpartyId: "approved-vendor"
+  },
+  asset: {
+    type: "erc20",
+    chainId: 11155111,
+    symbol: "USDC"
+  },
+  amount: "25",
+  context: {
+    environment: "test",
+    metadata: {}
+  },
+  requestedAt: new Date().toISOString()
+});
+
+const policy: FinancialPolicy = {
+  apiVersion: "finguard.dev/v1alpha1",
+  kind: "FinancialPolicy",
+  metadata: {
+    id: "policy-1",
+    name: "Treasury policy",
+    version: "v1",
+    status: "published"
+  },
+  scope: {
+    actors: [],
+    roles: [],
+    accounts: [],
+    sourceProviders: ["safe"],
+    actions: ["asset.transfer"],
+    environments: ["test"]
+  },
+  enforcement: {
+    minimumEnforcement: "gateway",
+    onUnsupported: "block"
+  },
+  rules: [
+    {
+      id: "approved-vendor",
+      family: "counterparty",
+      effect: "allow",
+      reasonCode: "counterparty.allowed",
+      recipients: ["approved-vendor"]
+    }
+  ],
+  defaults: {
+    outcome: "BLOCK",
+    reasonCode: "default.block",
+    validForSeconds: 300
+  }
+};
+
+const decision = evaluateFinancialPolicy({ intent, policy });
+const coverage = planEnforcementCoverage({
+  intent,
+  policy,
+  matchedRules: decision.matchedRules
+});
+
+const unsignedEnvelope = createAuthorizationEnvelope({
+  authorizationId: "auth-1",
+  intent,
+  decision,
+  coverageReport: coverage,
+  nonce: "nonce-1",
+  idempotencyKey: "invoice-123"
+});
+
+const signedEnvelope = await signAuthorizationEnvelope({
+  envelope: unsignedEnvelope,
+  signer: createHmacAuthorizationSigner({
+    keyId: "local-dev-key",
+    secret: process.env.FINGUARD_AUTHORIZATION_SECRET ?? "dev-secret"
+  })
+});
+
+const verification = verifyAuthorizationEnvelope({
+  envelope: signedEnvelope,
+  intent,
+  hmacSecret: process.env.FINGUARD_AUTHORIZATION_SECRET ?? "dev-secret",
+  expectedKeyId: "local-dev-key",
+  selectedProvider: "safe"
+});
+
+if (!verification.ok) {
+  throw new Error(verification.reason);
+}
+```
+
+The local HMAC signer is for development and self-hosted demos. Production
+connectors should use a key-management boundary appropriate for the deployment
+model and should treat unsigned, expired, tampered, provider-mismatched, blocked,
+or approval-incomplete envelopes as non-executable.
+
+The core helpers are deterministic and side-effect-free by default:
+
+- `createFinancialIntent`
+- `validateFinancialIntent`
+- `evaluateFinancialPolicy`
+- `planEnforcementCoverage`
+- `createAuthorizationEnvelope`
+- `signAuthorizationEnvelope`
+- `verifyAuthorizationEnvelope`
+
+## Core Examples
+
+The repository includes small examples under `src/examples`:
+
+- `universal-policy-zerodev.ts`
+- `universal-policy-safe.ts`
+- `universal-policy-x402.ts`
+- `blocked-provider.ts`
+- `verify-authorization.ts`
+
+Each example returns or prints:
+
+- intent hash
+- policy decision
+- authorization hash
+- enforcement coverage
+
+Run the covered example tests:
+
+```bash
+pnpm test
+```
+
+The examples intentionally do not broadcast transactions, create Safe proposals,
+or submit x402 payments. They demonstrate the portable authorization boundary
+that provider adapters should verify before execution.
 
 ## API Keys
 
